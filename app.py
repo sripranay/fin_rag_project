@@ -5,6 +5,7 @@ from sentence_transformers import SentenceTransformer
 import yfinance as yf
 import matplotlib.pyplot as plt
 
+os.makedirs(store_dir, exist_ok=True)
 
 # ---------- Paths & Chroma ----------
 BASE = os.path.dirname(os.path.abspath(__file__))
