@@ -1,48 +1,58 @@
 import os
+import sys
 import streamlit as st
+
+# --- Patch sqlite for environments with old sqlite (Streamlit Cloud, etc.) ---
+try:
+    import pysqlite3  # provided by pysqlite3-binary
+    sys.modules["sqlite3"] = pysqlite3
+except Exception:
+    # If pysqlite3 isn't available locally, just skip; it will work where needed
+    pass
+# ---------------------------------------------------------------------------
+
 import chromadb
 from sentence_transformers import SentenceTransformer
 import yfinance as yf
 import matplotlib.pyplot as plt
 
-os.makedirs(store_dir, exist_ok=True)
-
 # ---------- Paths & Chroma ----------
 BASE = os.path.dirname(os.path.abspath(__file__))
-store_dir = os.path.join(BASE, "vector_store")
+STORE_DIR = os.path.join(BASE, "vector_store")
 COLLECTION = "finance-docs"
 
-try:
-    client = chromadb.PersistentClient(path=store_dir)
+os.makedirs(STORE_DIR, exist_ok=True)
 
+try:
+    client = chromadb.PersistentClient(path=STORE_DIR)
 except Exception:
     # Fallback for older Chroma installs
     from chromadb.config import Settings
-    client = chromadb.Client(Settings(persist_directory=store_dir, anonymized_telemetry=False))
+    client = chromadb.Client(
+        Settings(persist_directory=STORE_DIR, anonymized_telemetry=False)
+    )
 
 # Open or create the collection
 try:
     collection = client.get_collection(COLLECTION)
 except Exception:
     collection = client.create_collection(COLLECTION)
-# After: collection = client.get_collection(COLLECTION)
-# If empty collection, add a tiny seed so queries work in the cloud:
+
+# If empty collection, add a tiny seed so queries work in the cloud
 try:
     existing = collection.peek(1)
 except Exception:
     existing = {"documents": []}
 
 if not existing.get("documents"):
-    # seed with minimal facts (or call a tiny ingestion function)
     seed_docs = ["Seed fact: RELIANCE.NS is listed on NSE."]
     seed_meta = [{"ticker": "RELIANCE.NS", "date": "seed"}]
-    seed_ids  = ["seed-1"]
-    from sentence_transformers import SentenceTransformer
+    seed_ids = ["seed-1"]
     _m = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
     seed_emb = _m.encode(seed_docs, normalize_embeddings=True).tolist()
-    collection.add(documents=seed_docs, metadatas=seed_meta, ids=seed_ids, embeddings=seed_emb)
-
-
+    collection.add(
+        documents=seed_docs, metadatas=seed_meta, ids=seed_ids, embeddings=seed_emb
+    )
 
 # ---------- Model ----------
 @st.cache_resource
@@ -51,14 +61,13 @@ def load_model():
 
 model = load_model()
 
-
 # ---------- UI: RAG search ----------
 st.title("Finance RAG — Quick Search")
 st.write("Query the facts and daily summaries you ingested.")
 
-query  = st.text_input("Your question:", "What's the latest daily summary for RELIANCE.NS?")
+query = st.text_input("Your question:", "What's the latest daily summary for RELIANCE.NS?")
 ticker = st.text_input("Ticker filter (optional):", "RELIANCE.NS")
-top_k  = st.slider("Number of results", 1, 10, 5)
+top_k = st.slider("Number of results", 1, 10, 5)
 
 if st.button("Search"):
     q_emb = model.encode([query], normalize_embeddings=True).tolist()
@@ -70,7 +79,7 @@ if st.button("Search"):
     res = collection.query(query_embeddings=q_emb, n_results=top_k, where=where)
 
     # Pack results safely
-    docs  = res.get("documents", [[]])[0]
+    docs = res.get("documents", [[]])[0]
     metas = res.get("metadatas", [[]])[0]
     dists = res.get("distances", [[]])[0]
     hits = list(zip(docs, metas, dists))
@@ -81,7 +90,6 @@ if st.button("Search"):
         for i, (doc, meta, dist) in enumerate(hits, start=1):
             st.markdown(f"**{i}.** {doc}")
             st.caption(f"meta={meta} · distance={dist:.4f}")
-
 
 # ---------- UI: Price chart + quick stats ----------
 st.divider()
@@ -94,9 +102,13 @@ period = st.selectbox("Chart period", ["1mo", "3mo", "6mo", "1y"], index=0)
 chart_ticker = (ticker or "").strip() or "RELIANCE.NS"
 
 try:
-    # Fetch prices for selected period
-    data = yf.download(chart_ticker, period=period, interval="1d",
-                       progress=False, auto_adjust=True).dropna()
+    data = yf.download(
+        chart_ticker,
+        period=period,
+        interval="1d",
+        progress=False,
+        auto_adjust=True,
+    ).dropna()
 
     if not data.empty:
         close = data["Close"]
@@ -117,7 +129,7 @@ try:
         c3.metric(f"{period} Δ", f"{period_change:+.2f}", f"{period_pct:+.2f}%")
 
         # ---- SMA overlays
-        sma5  = close.rolling(5,  min_periods=1).mean()
+        sma5 = close.rolling(5, min_periods=1).mean()
         sma10 = close.rolling(10, min_periods=1).mean()
 
         fig, ax = plt.subplots()
