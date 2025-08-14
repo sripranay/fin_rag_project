@@ -1,8 +1,10 @@
-streamlit>=1.33
-chromadb>=0.5
-sentence-transformers>=2.6
+streamlit>=1.36
+chromadb==0.5.3
+pydantic<2
+sentence-transformers>=2.2.2
 yfinance>=0.2.40
+matplotlib>=3.8
 pandas>=2.2
 numpy>=1.26
-matplotlib>=3.8
-pypdf>=4.2
+tqdm>=4.66
+requests>=2.31
