@@ -13,6 +13,7 @@ COLLECTION = "finance-docs"
 
 try:
     client = chromadb.PersistentClient(path=store_dir)
+
 except Exception:
     # Fallback for older Chroma installs
     from chromadb.config import Settings
@@ -23,6 +24,23 @@ try:
     collection = client.get_collection(COLLECTION)
 except Exception:
     collection = client.create_collection(COLLECTION)
+# After: collection = client.get_collection(COLLECTION)
+# If empty collection, add a tiny seed so queries work in the cloud:
+try:
+    existing = collection.peek(1)
+except Exception:
+    existing = {"documents": []}
+
+if not existing.get("documents"):
+    # seed with minimal facts (or call a tiny ingestion function)
+    seed_docs = ["Seed fact: RELIANCE.NS is listed on NSE."]
+    seed_meta = [{"ticker": "RELIANCE.NS", "date": "seed"}]
+    seed_ids  = ["seed-1"]
+    from sentence_transformers import SentenceTransformer
+    _m = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    seed_emb = _m.encode(seed_docs, normalize_embeddings=True).tolist()
+    collection.add(documents=seed_docs, metadatas=seed_meta, ids=seed_ids, embeddings=seed_emb)
+
 
 
 # ---------- Model ----------

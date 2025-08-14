@@ -1,7 +1,12 @@
-# Don’t upload local caches or your local vector DB
-vector_store/
+# Python
 __pycache__/
-*.pyc
 .ipynb_checkpoints/
-.env
+.venv/
+venv/
+*.pyc
+
+# Local vector DB (do NOT commit)
+vector_store/
+
+# OS / misc
 .DS_Store
